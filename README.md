@@ -1,2 +1,3 @@
 # IS6812-project
-This if my first commit.
+This is my first commit. 
+This folder is to put all my work in. 
