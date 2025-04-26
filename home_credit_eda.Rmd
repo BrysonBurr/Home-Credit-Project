@@ -1,0 +1,485 @@
+---
+title: "Home Credit EDA"
+author: "Bryson Burr"
+date: "February 11, 2025"
+output:
+  html_document:
+    number_sections: true
+    toc: true
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+# Introduction
+
+## Project Goal
+The goal of this project is to predict how capable clients are of repaying a loan 
+based on application, demographic, and historical credit behavior. This notebook
+is to initially explore the given data, trying to find interesting relationships, data problems
+or anything that may help in my analytical approach.
+
+## Business Problem Statement
+Many people who have insufficient or non-existent credit histories struggle to get loans. Many clients have the ability to repay their loans but get rejected due to their credit histories. This is a problem as failing to accurately predict repayment ability means rejecting customers who could reliably repay their loans. 
+
+## Analytic Problem
+Customer repayment probability will be generated using a supervised machine-learning model. The model will use as inputs data collected on past customers such as application, demographic, and historical credit behavior. The model will use this information to predict the probability that the customers will either repay or not repay their loans. 
+
+## Questions to guide exploration
+Is the target variable balanced?
+
+How many missing data is there in the dataset? In each column? What do I do with them?
+
+What do I think would be some of the most important factors to determine if someone will pay off their loan?
+
+What are the distributions/relationship with loan repayment for key variables such as age,
+income, and employment history?
+
+Are there any highly correlated variables?
+
+Are there any placeholder values in columns?
+
+Do more credit inquiries lead to being less likely to repay a loan?
+
+Is there a relationship between education type, family status, or number of kids and loan repayment?
+
+Is there a relationship between income type and loan repayment? 
+
+Do social surroundings or region type have a relationship with loan repayment due to 
+possibly indicating economic condition?
+
+Are those with a car more likely to repay a loan?
+
+What are the external sources and could they be a normalized version of credit scores? Would
+that have a relationship with loan repayment?
+
+Why are days birth, days employed, days registration, and days id publish negative? Does it make sense to make them positive? 
+
+Will changing placeholder values in days employed make a big difference?
+
+# EDA
+
+## Package loading
+```{r setup, message = FALSE, warning = FALSE}
+# Set working directory
+mydir <- getwd()
+
+setwd(mydir)
+
+library(tidyverse)
+library(janitor)
+library(psych)
+library(skimr)
+```
+
+## Data Import
+```{r data loading, message = FALSE, warning = FALSE}
+# load data
+application_train = read_csv("application_train.csv", col_names = TRUE, show_col_types = FALSE)
+application_test = read_csv("application_test.csv", col_names = TRUE, , show_col_types = FALSE)
+```
+
+## Quick Cleaning
+```{r data cleaning, warning = FALSE}
+# check structure of data and ensure it loaded correctly
+head(application_train)
+
+# clean column names, make them lowercase
+application_train <- application_train |>
+  clean_names()
+
+application_test <- application_test |>
+  clean_names()
+
+# factor all character variables for analysis
+application_train <- application_train |>
+  mutate(across(where(is.character), as.factor),
+         target = as.factor(target)) 
+
+application_test <- application_test |>
+  mutate(across(where(is.character), as.factor)) 
+```
+
+## Exploratory Visualizations and Summary Tables
+
+### Target Variable Exploration
+```{r target variable exploration, warning = FALSE}
+# create barplot for target variable
+ggplot(application_train, aes(x = target)) +
+  geom_bar() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Distribution of Target Variable",
+       x = "Target (0 = No Difficulties, 1 = Payment Difficulties)",
+       y = "Count") +
+  theme_minimal()
+
+
+# proportions of target variable for training data frame
+application_train |>
+  pull(target) |>
+  table() |>
+  prop.table() |>
+  round(2)
+```
+
+The target variable is very unbalanced. 92% of the values are 0, with only 8% of the
+values having troubles repaying loans. A majority class classifier then would be
+92% accurate if we just wanted to predict whether or not they would have problems
+repaying loans rather than predicting the probability that they would have problems 
+or not. 
+
+### Feature Exploration
+
+```{r variable exploration, warning = FALSE}
+# barplot for gender by target
+application_train |> 
+  ggplot(aes(x = code_gender, fill = target)) +
+  geom_bar(position = "dodge") + 
+  labs(title = "Distribution of Gender by Target",
+       x = "Gender",
+       y = "Count")
+```
+
+The barplot values look very similar, there does not seem to be any difference
+in male or females having troubles repaying loans. 
+
+```{r income, warning = FALSE}
+# boxplot to see if income has effect on target
+application_train |>
+  ggplot(aes(x = target, y = amt_income_total)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Income by Target",
+       x = "Target",
+       y = "Income")
+
+# outlier income for 1 affecting boxplot, filter for less than 5000000 to see if that helps
+application_train |>
+  filter(amt_income_total < 5000000) |>
+  ggplot(aes(x = target, y = amt_income_total)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Income by Target",
+       x = "Target",
+       y = "Income")
+```
+
+After taking out the outlier for trouble of repaying loans, there did not seem 
+to be much of a difference when it comes to income for repaying loans.
+
+```{r credit amount, warning = FALSE}
+# boxplot to compare credit amount and target
+application_train |>
+  ggplot(aes(x = target, y = amt_credit)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Credit Amount by Target",
+       x = "Target",
+       y = "Credit Amount")
+```
+
+The two boxplots look to very similar, doesn't seem to be much of a diference 
+for the target variable.
+
+```{r good price, warning = FALSE}
+# boxplot for the price of goods and target
+application_train |>
+  ggplot(aes(x = target, y = amt_goods_price)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Price of Goods by Target",
+       x = "Target",
+       y = "Price of Goods")
+```
+
+Looks very similar, does not seem to be any differences between the target values.
+
+```{r credit inquiries, warning = FALSE}
+# boxplot to see if amount of credit inquiries varies between target values
+application_train |>
+  ggplot(aes(x = target, y = amt_req_credit_bureau_year)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Amount of Credit Inquiries by Target",
+       x = "Target",
+       y = "Amount of Credit Inquiries")
+
+# looks like there could be a slight difference. Lets use skim to see specific values
+application_train |>
+  group_by(target) |>
+  skim(amt_req_credit_bureau_year)
+```
+
+There looks to be slightly more requests for those with loan payment struggles, 
+but it may not be enough of a difference to be very important.
+
+```{r days employed, warning = FALSE}
+
+# check summary for days employed
+summary(application_train$days_employed)
+# 365243 days employed doesn't make sense. Possible placeholder?
+
+# plot to see if there is large amount of these
+hist(application_train$days_employed, breaks = 100, main = "Days Employed distribution", xlab = "Days Employed")
+# big amount of data points at 365243, looks to be placeholder for NA
+
+# get absolute values for negative values, change 365243 to NA
+application_train <- application_train |>
+  mutate(across(c(days_birth, days_employed, days_id_publish, days_registration), abs),
+         days_employed = ifelse(days_employed == 365243, NA, days_employed))
+
+## do this for testing dataset too
+application_test <- application_test |>
+  mutate(across(c(days_birth, days_employed, days_id_publish, days_registration), abs),
+         days_employed = ifelse(days_employed == 365243, NA, days_employed))
+
+# boxplot for days employed by target
+application_train |>
+  ggplot(aes(x = target, y = days_employed)) +
+  geom_boxplot() + 
+  labs(title = "Distribution of Days employed by Target",
+       x = "Target",
+       y = "Days Employed")
+
+# seems to be slight difference between the two targets
+# Looking at actual values to see difference
+application_train |>
+  group_by(target) |>
+  skim(days_employed)
+```
+
+There was a placeholder value of 365243 for this column. I changed those placeholders
+to NA to get a more accurate look at the distribution. There seems to be a slight difference in groups for days employed. Those with loan repayment problems may be employed for smaller amounts of time.
+
+```{r days birth, warning = FALSE}
+# check days birth to see if there are any outliers
+summary(application_train$days_birth) 
+
+# create boxplot for days birth and target
+# dividing by 365 to make it more readable in years
+application_train |>
+  ggplot(aes(x = target, y = days_birth / 365)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Age by Target",
+       x = "Target",
+       y = "Age")
+
+# Looks to be possible difference
+application_train |>
+  group_by(target) |>
+  skim(days_birth)
+```
+
+There seems to be a bit of a difference in age and loan repayment difficulties. 
+It looks like those who are older do not have as many loan repayment problems. 
+
+```{r identity document, warning = FALSE}
+# quick check to see if days id publish have any placeholders
+# create boxplot for identity document dayas by target
+summary(application_train$days_id_publish)
+application_train |>
+  ggplot(aes(x = target, y = days_id_publish)) +
+  geom_boxplot() +
+  labs(title = "Days before application that client changed identity document by Target",
+       x = "Target",
+       y = "Days")
+```
+
+There is a small difference between the two, but doesn't look to be significant.
+
+```{r registration, warning = FALSE}
+# quick check to see if days registration have any placeholders
+summary(application_train$days_registration)
+# create boxplot for registration days by target
+application_train |>
+  ggplot(aes(x = target, y = days_registration)) +
+  geom_boxplot() +
+  labs(title = "Days before application that client changed registration by Target",
+       x = "Target",
+       y = "Days")
+```
+
+There does not look to be any difference for the target values in days before 
+the application that the client changed their registration
+
+```{r income type, warning = FALSE, fig.width = 10}
+# barplot to see if income type matters for target
+application_train |> 
+  ggplot(aes(x = name_income_type, fill = target)) +
+  geom_bar(position = "fill") + # doing fill to see propotion rather than raw counts
+  labs(title = "Income Type by Target",
+       x = "Income Type",
+       y = "Count")
+# high proportion of problems for unemployed and maternity leave, see if counts for those professions are large enough to be something
+table(application_train$name_income_type)
+```
+
+When initially looking at the proportions for income type by target, unemployed and
+maternity leave had high proportions. However, there were only 5 values for maternity
+leave ad 22 for unemployed, which does not seem to be big enough values to matter.
+Overall, there does not look to be a difference in income type and loan repayment. 
+
+```{r education type, warning = FALSE, fig.width = 10}
+# barplot for education type by target
+application_train |> 
+  ggplot(aes(x = name_education_type, fill = target)) +
+  geom_bar(position = "fill") + # using fill again for proportions rather than counts
+  labs(title = "Education Type by Target",
+       x = "Education Type",
+       y = "Count") 
+```
+
+Lower Secondary has a slightly higher proportion of loan payment difficulties than
+the the others, but doesn't look to be significant enough amount to be a big difference
+
+```{r family status, warning = FALSE}
+# barplot for family status
+application_train |>
+  ggplot(aes(x = name_family_status, fill = target)) +
+  geom_bar(position = "fill") + 
+  labs(title = "Family Status by Target",
+       x = "Family Status",
+       y = "Count")
+```
+
+The proportions for family status and the target are all very similar. Does not look
+to be important in determining loan repayment difficulties.
+
+```{r number of kids, warning = FALSE}
+# use skim to see amount of children by target
+application_train |>
+  group_by(target) |>
+  skim(cnt_children)
+```
+
+The number of children for both values of targets are very sinilar and thus there
+does not seem to be a difference.
+
+```{r external scores, warning = FALSE}
+# Using skim to see numbers for external sources by target
+application_train |>
+  group_by(target) |>
+  skim(ext_source_1)
+# does look to be lower score for 1, lots of missing values
+
+# does that fit for 2 and 3?
+application_train |>
+  group_by(target) |>
+  skim(ext_source_2)
+
+# bigger sample size, looks to be slightly lower score for 1
+application_train |>
+  group_by(target) |>
+  skim(ext_source_3)
+# looks to hold for all three scores, 1 and 3 both missing good amount of values
+```
+
+While I do not know exactly what the external sources are, I think it's possible
+they are normalized credit scores. Whatever they are, these seem to have the 
+biggest differences between having loan repayment problems and not. These will be
+important in determining loan payment problems.
+
+```{r region rating, warning = FALSE}
+# barplot for region rating by target
+application_train |>
+  ggplot(aes(x = factor(region_rating_client), fill = target)) +
+  geom_bar(position = "fill") + 
+  labs(title = "Region Rating by Target",
+       x = "Region Rating",
+       y = "Count")
+# slightly higher proportion of 1's for rating of 3, but also lower count of them
+```
+
+The proportion of people who have a region rating of 3 and trouble repaying loans
+is slightly higher than the others. It is possible there is a small effect on it.
+
+```{r social surroundings, warning = FALSE}
+# social surroundings by target
+application_train |>
+  group_by(target) |>
+  skim(obs_30_cnt_social_circle)
+```
+
+The social surrounds of those defaulting are about the same those who are not defaulting.
+
+```{r car, warning = FALSE}
+# barplot for owning a car by target
+application_train |> 
+  ggplot(aes(x = flag_own_car, fill = target)) +
+  geom_bar(position = "fill") + 
+  labs(title = "Owning Car by Target",
+       x = "Owning Car",
+       y = "Count")
+
+# Seeing if the age of the car changes anything
+application_train |>
+  group_by(target) |>
+  skim(own_car_age)
+
+application_train |>
+  ggplot(aes(x = target, y = own_car_age)) +
+  geom_boxplot() 
+```
+
+Neither owning a car nor the age of a car looks to be any different when it comes
+to repaying loans.
+
+```{r correlation, warning = FALSE}
+# seeing if there is any correlation between the external sources
+#creating train copy to make target variable numeric to find correlation
+train_copy <- application_train
+train_copy$target = as.numeric(train_copy$target)
+
+# finding correlation between target and the external sources
+cor_result <- cor(train_copy[c("target", "ext_source_1", "ext_source_2", "ext_source_3")], use = "pairwise.complete.obs") %>% round(2)
+cor_result
+```
+
+There is a slight negative correlation between the three external sources and the
+target. It is small, but there is something there. 
+
+## Missing Data
+```{r missing values, warning = FALSE}
+# how many total NA's?
+sum(is.na(application_train))
+#percent of NA's in dataset
+sum(is.na(application_train)) / (ncol(application_train) * nrow(application_train)) * 100
+# how many rows contain at least 1 NA?
+sum(rowSums(is.na(application_train)) > 0) 
+# only 8000 don't have at least 1 NA
+## are there any rows that have more than 25% of NA?
+sum(rowSums(is.na(application_train)) >= 30) 
+## more than half have at least 25% of NA's
+
+# percent of NA's in each column
+na_percentage <- round(sapply(application_train, function(x) sum(is.na(x)) / length(x) * 100),4)
+# sort percentages
+na_percentage_sorted <- sort(na_percentage, decreasing = TRUE)
+# show percent of columns that have more than 50% of the data missing
+na_percentage_sorted[na_percentage_sorted > 50]
+```
+
+There are a lot of missing values in this dataset. Over half the rows in the dataset
+have at least 25% of their values as missing. 41 columns out of the 122 columns
+have at least 50% or more of their data missing, with many of these columns having to 
+do with the living area spaces. I believe any columns that have over 50 or 60% of
+the data missing could most likely be removed before modeling in order to improve the model.
+For the rest of the missing values, I plan on using KNN to impute those values.
+
+# Results
+I think the biggest thing I have learned through EDA is that the external values, age,
+and number of days employed seem to be the predictors that differ the most when
+it comes to problems repaying a loan or not. These seem to be the strongest relationships, 
+so when modeling, I expect those to be some of the biggest factors in determining
+the probability that someone will have problems repaying their loan. Most of the
+other relationships seemed to be fairly normal and not different when compared to
+being able to repay a loan or not. I encountered a few data problems I encountered. 
+The first is that four columns were all negative to indicate time passed. I changed
+them to be all positive to make it more understandable. There was also a placeholder
+value for days employed that I had to change into NAs. 
+
+This EDA first made me realize I will have to deal with class imbalance when
+modeling. I will have to look into how to do that and what the best metrics are
+to evaluate modeling class imbalance. I now have an idea of what some of the most
+important features are likely to be while also having a plan on which columns
+I can remove due to missing values. EDA has also helped me decide that I want to
+impute the missing values, most likely through KNN. Lastly, because there seems
+to be complex relationships between these variables and being able to repay a loan,
+I think a slightly more complex model, like a Random Forest model, would be the best
+option to capture those relationships and get better results. 
