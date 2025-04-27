@@ -1,6 +1,6 @@
 # Home Credit Project
 
-## Business problem and Project Objective
+## Business problem and project objective
 Home Credit Group aims to broaden financial inclusion for unbanked populations by providing a positive and safe borrowing experience. The key challenge is accurately predicting which loan applicants will be able to repay their loans. This prediction is critical because:
 
 1. Rejecting good applicants means lost business opportunities
